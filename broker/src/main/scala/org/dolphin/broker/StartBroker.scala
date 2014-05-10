@@ -2,9 +2,10 @@ package org.dolphin.broker
 
 import akka.actor.{Props, ActorSystem}
 import com.typesafe.config.ConfigFactory
-import org.dolphin.broker.actor.{StoreAct, EnrollAct}
+import org.dolphin.broker.actor.{MetricAct, StoreAct, EnrollAct}
 import org.dolphin.domain.BrokerModel
 import org.dolphin.common._
+import org.dolphin.broker._
 
 /**
  * User: bigbully
@@ -12,10 +13,6 @@ import org.dolphin.common._
  * Time: 上午9:50
  */
 object StartBroker {
-
-  def getExistentTopics = {
-    List("topic1", "topic2")
-  }
 
   def main(args:Array[String]) {
     val system = ActorSystem("broker")
@@ -26,12 +23,22 @@ object StartBroker {
     val cluster = if (conf.hasPath("broker.cluster")) conf.getString("broker.cluster") else DEFAULT_CLUSTER
     val managerHost = conf.getString("manager.host")
     val managerPort = conf.getInt("manager.port")
-    val storePath = conf.getString("broker.store")
-    val enrollAct = system.actorOf(Props(classOf[EnrollAct], managerHost, managerPort), id.toString)
-    val storeAct = system.actorOf(Props(classOf[StoreAct], storePath, enrollAct.path), STORE_ACT_NAME)
 
-    val topics = getExistentTopics
-    enrollAct ! BrokerModel(id, host, port, cluster, Some(topics))
+
+    val storePath = conf.getString("broker.store.path")
+    val maxPersistentDays = conf.getInt("broker.store.maxPersistentDays")
+
+    val params = Map(
+      "cluster" -> cluster,
+      "managerHost" -> managerHost,
+      "managerPort" -> managerPort,
+      "path" -> storePath,
+      "maxPersistentDays" -> maxPersistentDays.toString)
+
+    val enrollAct = system.actorOf(Props(classOf[EnrollAct], BrokerModel(id, cluster, host, port), params), ENROLL_ACT_NAME)
+
+    enrollAct ! REGISTER
+
   }
 
 

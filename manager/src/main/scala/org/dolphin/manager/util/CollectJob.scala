@@ -3,6 +3,7 @@ package org.dolphin.manager.util
 import org.quartz.{JobExecutionContext, Job}
 import akka.actor.ActorRef
 import org.dolphin.common._
+import org.dolphin.manager._
 
 
 /**
@@ -14,6 +15,6 @@ class CollectJob extends Job {
 
   override def execute(context: JobExecutionContext) {
     val collectAct = context.getJobDetail.getJobDataMap.get(COLLECT_ACT_NAME).asInstanceOf[ActorRef]
-    collectAct ! COLLECT_MAIL
+    collectAct ! COLLECT
   }
 }

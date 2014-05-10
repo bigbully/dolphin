@@ -1,8 +1,9 @@
 package org.dolphin.manager.actor
 
 import akka.actor.{Identify, ActorLogging, Props, Actor}
-import org.dolphin.domain.BrokerModel
-import org.dolphin.mail.FindLazyBrokers
+import org.dolphin.domain.{TopicModel, BrokerModel}
+import org.dolphin.common._
+import org.dolphin.manager.mail.{RegisterBroker, LazyBrokersForTopic, FindLazyBrokers}
 
 
 /**
@@ -20,18 +21,17 @@ class BrokerRouterAct(val clusterName:String) extends Actor with ActorLogging{
   }
 
   override def receive: Actor.Receive = {
-    case brokerModel:BrokerModel => {
-      child(brokerModel.id.toString) match {
-        case Some(brokerAct) => log.error("已经存在broker:{}, 不继续创建!", brokerModel)
+    case RegisterBroker(broker) => {
+      child(broker.id.toString) match {
+        case Some(brokerAct) => log.error("存在相同的broker:{}, 不继续创建!", broker)
         case None => {
-          actorOf(Props(classOf[BrokerAct], brokerModel), brokerModel.id.toString)
-          log.info("成功注册了一个broker{}", brokerModel)
+          actorOf(Props(classOf[BrokerAct], broker), broker.id.toString) ! REGISTER_SUCCESS
+          log.info("成功注册了一个broker{}", broker)
         }
       }
     }
-    case FindLazyBrokers(topicModel) => {
-      val lazyBrokers = findLazyBrokers(topicModel.name)
-      sender ! (lazyBrokers, topicModel)
+    case FindLazyBrokers(topic) => {
+      sender ! LazyBrokersForTopic(findLazyBrokers(topic.name))
     }
   }
 }

@@ -1,8 +1,20 @@
 package org.dolphin.manager.actor
 
-import akka.actor.{Props, ActorRef, Actor}
-import org.dolphin.domain.{TopicModel, ClientModel, Model, BrokerModel}
+import akka.actor.{ActorLogging, Props, ActorRef, Actor}
+import org.dolphin.domain.{TopicModel, BrokerModel}
 import org.dolphin.common._
+import org.dolphin.mail.{TopicCreated, BrokerRegister, ClientRegister}
+import org.dolphin.manager.mail._
+import org.dolphin.manager.domain.{Broker, Topic, Client}
+import org.dolphin.manager._
+import org.dolphin.manager.mail.RegisterClient
+import org.dolphin.mail.ClientRegister
+import org.dolphin.manager.mail.RegisterBroker
+import org.dolphin.mail.BrokerRegister
+import org.dolphin.domain.BrokerModel
+import scala.Some
+import org.dolphin.manager.mail.TopicFromClient
+import org.dolphin.manager.mail.TopicsFromBroker
 
 
 /**
@@ -10,32 +22,50 @@ import org.dolphin.common._
  * Date: 14-4-26
  * Time: 下午5:03
  */
-class RegistryAct extends Actor {
+class RegistryAct extends Actor with ActorLogging{
 
   import context._
 
   var clusterRouterAct: ActorRef = _
   var clientRouterAct: ActorRef = _
 
-  /**
-   * 根据brokerModel的不同情况进行不同的注册步骤
-   * @param brokerModel
-   */
-  def prepare(brokerModel: BrokerModel) {
-    brokerModel match {
-      case BrokerModel(id, null, port, cluster, topics) => prepare(BrokerModel(id, sender.path.address.host.get, port, cluster, topics))
-      case BrokerModel(_, _, _, cluster, Some(topics)) => {
-        topics.foreach(topic => clusterRouterAct ! TopicModel(topic, cluster, Some(brokerModel)))
-        clusterRouterAct ! brokerModel
+  override def receive: Actor.Receive = {
+    case ClientRegister(clientModel, topicModel) => {
+      val client = Client(clientModel)
+      client.remotePath = sender.path.toString
+      clientRouterAct ! RegisterClient(client)
+      clusterRouterAct ! TopicFromClient(Topic(topicModel), client)
+    }
+    case BrokerRegister(brokerModel, topicModels) => {
+      val broker = Broker(prepare(brokerModel), sender.path.toString)
+      clusterRouterAct ! RegisterBroker(broker)
+      topicModels match {
+        case Some(topics) => {
+          clusterRouterAct ! TopicsFromBroker(topics.map(model => Topic(model)), broker)
+        }
+        case None => //donothing
       }
-      case _ => clusterRouterAct ! brokerModel
+    }
+    case mail@TopicCreated(topicModel, brokerModel) => {
+      val topic = Topic(topicModel)
+      val broker = Broker(prepare(brokerModel), sender.path.toString)
+      val mail = CreateTopicFinished(topic, broker)
+      actorSelection(topic.path) ! mail
+      actorSelection(broker.path) ! mail
+      log.info("broker:{}完成topic:{}的创建!", brokerModel, topicModel)
     }
   }
-  
-  override def receive: Actor.Receive = {
-    case model: ClientModel => clientRouterAct ! ClientModel(model, sender.path.toString)
-    case model: TopicModel => clusterRouterAct ! model
-    case model: BrokerModel => println(sender.path);prepare(model)
+
+  /**
+   * 如果broker没有设置host，直接从sender中获取
+   * @param model
+   * @return
+   */
+  def prepare(model: BrokerModel): BrokerModel = {
+    model.host match {
+      case null => BrokerModel(model.id, model.cluster, sender.path.address.host.get.toString, model.port)
+      case _ => model
+    }
   }
 
   @throws[Exception](classOf[Exception])

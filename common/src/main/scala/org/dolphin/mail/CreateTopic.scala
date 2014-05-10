@@ -4,9 +4,9 @@ import org.dolphin.domain.TopicModel
 
 /**
  * User: bigbully
- * Date: 14-5-1
- * Time: 上午10:08
+ * Date: 14-5-6
+ * Time: 上午1:30
  */
-case class FindLazyBrokers(topicModel:TopicModel) {
+case class CreateTopic(topicModel:TopicModel) {
 
 }

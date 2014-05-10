@@ -11,6 +11,8 @@ import java.util.concurrent.atomic.AtomicLong
  */
 package object client {
 
+  val BROKER_ROUTER_ACT_NAME = "brokerRouterAct"
+  val ACTOR_ROOT_PATH = "/user/enrollAct"
   private val num = new AtomicLong(0)
 
   def generateId = {

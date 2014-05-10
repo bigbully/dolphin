@@ -4,7 +4,9 @@ import akka.actor.{ActorLogging, ActorRef, Props, Actor}
 import org.dolphin.domain.{Model, ClientModel, TopicModel, BrokerModel}
 import org.dolphin.Util.DolphinException
 import org.dolphin.common._
-import org.dolphin.mail.ClientRegisterFailure
+import org.dolphin.mail.{ClientRegister, ClientRegisterFailure}
+import org.dolphin.manager.mail.{Mail, TopicsFromBroker, RegisterBroker, TopicFromClient}
+import org.dolphin.manager.domain.Broker
 
 /**
  * User: bigbully
@@ -16,21 +18,12 @@ class ClusterRouterAct extends Actor with ActorLogging {
   import context._
 
   override def receive: Actor.Receive = {
-    case model: BrokerModel => handleCluster(model.cluster, _ ! model, createClusterAndRegister(_, model))
-    case model@TopicModel(_, _, from) => handleCluster(model.cluster, _ ! model, cluster => {
-      //topic注册分两种情况
-      from match {
-        case Some(ClientModel(id, _)) => {//如果来自client，必须存在cluster，否则返回异常
-          actorSelection(ClientRouterAct.getClientPath(id)) ! ClientRegisterFailure(id, "当前不存在cluster:" + cluster)
-          log.error(new DolphinException("当前不存在cluster:" + cluster), "创建topic发生异常!")
-        }
-        case Some(_) => createClusterAndRegister(cluster, model)//如果来自broker，则创建cluster
-      }
+    case mail@TopicFromClient(topic, client) => handleCluster(topic.cluster, _ ! mail, cluster => {
+      actorSelection(client.path) ! ClientRegisterFailure(client.id, "当前不存在cluster:" + cluster)
+      log.error(new DolphinException("当前不存在cluster:" + cluster), "创建topic发生异常!")
     })
-  }
-
-  def createClusterAndRegister(clusterName:String, model:Model) {
-    actorOf(Props[ClusterAct], clusterName) ! model
+    case mail@RegisterBroker(broker) => handleCluster(broker.cluster, _ ! mail, createAndSendMail(_, mail))
+    case mail@TopicsFromBroker(topics, broker) => handleCluster(broker.cluster, _ ! mail, createAndSendMail(_, mail))
   }
 
   def handleCluster(clusterName: String, existent: ActorRef => Unit, nonExistent: String => Unit) {
@@ -40,5 +33,8 @@ class ClusterRouterAct extends Actor with ActorLogging {
     }
   }
 
+  def createAndSendMail(cluster:String, mail:Mail){
+    actorOf(Props(classOf[ClusterAct], cluster), cluster) ! mail
+  }
 
 }
