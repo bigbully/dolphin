@@ -16,6 +16,8 @@ object ClientTest {
     val topic = "myTopic"
     val cluster = "myCluster"
     producer.publish(topic, cluster)
+
+    producer.send("123".getBytes)
   }
 
 }

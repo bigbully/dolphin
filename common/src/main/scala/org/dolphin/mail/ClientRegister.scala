@@ -9,4 +9,6 @@ import org.dolphin.domain.{TopicModel, ClientModel}
  */
 case class ClientRegister(clientModel:ClientModel, topicModel:TopicModel) {
 
+
+
 }

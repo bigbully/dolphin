@@ -1,7 +1,7 @@
 package org.dolphin.client.producer
 
-import akka.actor.{ActorSystem, ActorRef}
-import org.dolphin.client.ClientConfig
+import akka.actor.{Actor, ActorSystem, ActorRef}
+import org.dolphin.client.{Client, ClientConfig}
 
 
 /**
@@ -9,9 +9,10 @@ import org.dolphin.client.ClientConfig
  * Date: 14-4-26
  * Time: 下午6:28
  */
-abstract class Producer(val id: String, val conf: ClientConfig, val system: ActorSystem) {
+abstract class Producer(private val id: String, private val conf: ClientConfig) extends Client(id, conf){
 
-  var enrollerAct: ActorRef = _
+  def publish(topic:String, cluster:String)
 
+  def send(msg:Array[Byte])
 
 }
