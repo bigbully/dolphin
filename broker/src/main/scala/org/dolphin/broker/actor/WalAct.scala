@@ -1,79 +1,29 @@
 package org.dolphin.broker.actor
 
 import akka.actor.{ActorLogging, Actor}
-import org.dolphin.broker._
-import java.io.{IOException, File}
 import org.dolphin.broker.store._
-import scala.collection.SortedSet
-import scala.collection.mutable.ArrayBuffer
+import org.dolphin.broker._
+import java.io.{RandomAccessFile, IOException}
 import java.util.zip.Adler32
+import WalAct._
+import java.util.{TimerTask, Timer}
 
 /**
  * User: bigbully
- * Date: 14-5-12
- * Time: 下午10:24
+ * Date: 14-5-24
+ * Time: 下午3:12
  */
-class WalAct(storeParams: Map[String, String]) extends Actor with ActorLogging {
-  val path = storeParams("path")
-  var storeDir: File = _
-  val walPath = path + "/journal"
-  var walDir: File = _
-  var started = false
-  val accessorPool = new DataFileAccessorPool
-  val DEFAULT_MAX_FILE_LENGTH: Int = 1024 * 1024 * 100
-  val DEFAULT_MAX_WRITE_BATCH_SIZE = 1024 * 1024 * 8
-  val FILE_PREFIX = "db-"
-  val FILE_SUFFIX = ".log"
-
-  //wal文件遵循的协议格式
-  val INT_LENGTH = 4
-  val LONG_LENGTH = 8
-  val BYTE_LENGTH = 1
-  val BATCH_TYPE = BYTE_LENGTH
-  val BATCH_HEAD_INT = INT_LENGTH//批量消息头所占长度26个byte
-  val CONTENT_LENGTH = INT_LENGTH//批量消息内容长度
-  val BATCH_HEAD_RECORD_MAGIC = bytes("BATCH HEAD")
-  val BATCH_HEAD_RECORD_MAGIC_LENGTH = BATCH_HEAD_RECORD_MAGIC.length
-  val BATCH_TAIL_RECORD_MAGIC = bytes("BATCH TAIL")
-  val BATCH_TAIL_RECORD_MAGIC_LENGTH = BATCH_TAIL_RECORD_MAGIC.length
-  val CHECKSUM_LENGTH = LONG_LENGTH//校验码的长度
-  val BATCH_CONTROL_RECORD_TYPE = 2 //批量包的类型
-  val RECORD_HEAD_SPACE = BATCH_HEAD_INT + BATCH_TYPE//批量包的头长度(1个int 固定值28) + 批量包的类型 (1个byte)
-  val BATCH_CONTROL_RECORD_SIZE = RECORD_HEAD_SPACE + BATCH_HEAD_RECORD_MAGIC_LENGTH + CONTENT_LENGTH + LONG_LENGTH
-  val BATCH_CONTROL_RECORD_HEADER = {
-    try {
-      val os = new DataByteArrayOutputStream
-      os.write(BATCH_CONTROL_RECORD_SIZE)
-      os.writeByte(BATCH_CONTROL_RECORD_TYPE)
-      os.write(BATCH_HEAD_RECORD_MAGIC)
-      val sequence = os.toByteSequence
-      sequence.compact
-      sequence.getData
-    }catch {
-      case e:IOException => throw new RuntimeException("无法创建批量消息头!")
-    }
-  }
-  val BATCH_CONTROL_RECORD_HEADER_LENGTH = BATCH_CONTROL_RECORD_HEADER.length
-
-  var sortedFiles = SortedSet.empty[DataFile]
+class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
+  import context._
 
   override def receive: Actor.Receive = {
-    case Init => initWalFiles
-  }
-
-  //从文件中去掉corrupted的片段，把完好的片段衔接起来
-  def recover(file: DataFile) {
-    val reader = accessorPool.openDataFileAccessor(file)
-    try {
-      val corruptedBlocks = file.corruptedBlocks.reverse
-      //todo
-    }finally {
-      accessorPool.closeDataFileAccessor(reader)
+    case CheckFile => {
+      recoveryCheck(dataFile)
+      parent ! CheckFileFinished
     }
-
   }
 
-  def recoveryCheck(file: DataFile):DataFile = {
+  def recoveryCheck(file: DataFile){
     var offset = 0
 
     val reader = accessorPool.openDataFileAccessor(file)
@@ -83,7 +33,7 @@ class WalAct(storeParams: Map[String, String]) extends Actor with ActorLogging {
         if (size > 0){//如果这批消息没有问题
           offset = offset + BATCH_CONTROL_RECORD_SIZE + size + BATCH_TAIL_RECORD_MAGIC_LENGTH
         }else {//如果有问题
-          val nextOffset = findNextBatchRecord(reader, offset + 1)
+        val nextOffset = findNextBatchRecord(reader, offset + 1)
           if(nextOffset >= 0){
             log.info("wal文件出现corrupt:offsets between {} - {}", offset, nextOffset)
             file.addCorruptedBlocks(offset, nextOffset)
@@ -99,10 +49,8 @@ class WalAct(storeParams: Map[String, String]) extends Actor with ActorLogging {
       accessorPool.closeDataFileAccessor(reader)
     }
     file.setLength(offset)
-    if (file.isCorrupted){
-      recover(file)
-    }
-    file
+    if (file.isCorrupted) recover(file)
+
   }
 
   def findNextBatchRecord(reader: DataFileAccessor,initialOffset: Int):Int = {
@@ -154,42 +102,62 @@ class WalAct(storeParams: Map[String, String]) extends Actor with ActorLogging {
     size
   }
 
-  def initWalFiles {
-    storeDir = new File(path)
-    if (!storeDir.exists()) storeDir.mkdir()
-
-    val startTime = System.currentTimeMillis()
-
-    walDir = new File(walPath)
-    if (!walDir.exists()) walDir.mkdir()
-    val files = walDir.listFiles.filter(file => file.isFile && file.getName.startsWith(FILE_PREFIX) && file.getName.endsWith(FILE_SUFFIX)).toSeq
-
-
-    //获得一个从大到小排列的sortedSet
-    files match {
-      case Nil => sortedFiles += createNewFile
-      case _ => {
-        files.foreach(file => {
-          sortedFiles += recoveryCheck(new DataFile(getFileIndex(file), file))
-        })
+  def recover(corruptedBlocks:List[(Int, Int)], length:Int, reader:DataFileAccessor, file:RandomAccessFile){
+    corruptedBlocks match {
+      case corruptedBlock :: Nil => {
+        recoverEachCorruptedBlock(corruptedBlock, (length, length), reader, file)
+      }
+      case corruptedBlock :: nextCorruptedBlock :: others => {
+        recoverEachCorruptedBlock(corruptedBlock, nextCorruptedBlock, reader, file)
+        recover(corruptedBlocks.tail, length, reader, file)
       }
     }
-
-    started = true
-    val endTime = System.currentTimeMillis()
-    log.info("存储模块初始化完成，共耗时{}ms", endTime - startTime)
   }
 
-  def getFileIndex(file: File) = {
-    val name = file.getName
-    name.substring(FILE_PREFIX.length, name.length - FILE_SUFFIX.length).toInt
+  def recoverEachCorruptedBlock(corruptedBlock:(Int, Int), nextCorruptedBlock:(Int, Int), reader:DataFileAccessor, file:RandomAccessFile) = {
+    var readOffset = corruptedBlock._2 + 1
+    var writeOffset = corruptedBlock._1
+
+    while (readOffset < nextCorruptedBlock._1){
+      val sizeBytes = new Array[Byte](INT_LENGTH)
+      reader.readFully(readOffset, sizeBytes)
+      val sizeIs = new DataByteArrayInputStream(sizeBytes)
+      val size = sizeIs.readInt
+
+      val eachBatchLength = BATCH_CONTROL_RECORD_HEADER_LENGTH + size + BATCH_TAIL_RECORD_MAGIC_LENGTH
+      val eachBatch = new Array[Byte](eachBatchLength)
+      //每读一批消息，写入这批消息
+      reader.readFully(readOffset, eachBatch)
+      file.seek(writeOffset)
+      file.write(eachBatch)
+      //准备继续读下一批消息
+      readOffset += eachBatchLength
+      writeOffset += eachBatchLength
+    }
   }
 
-  def createNewFile = {
-    val nextNum = if (sortedFiles.isEmpty) 1 else sortedFiles.head.id + 1
-    val file = new File(walDir, FILE_PREFIX + nextNum + FILE_SUFFIX)
-    if (!file.exists()) file.createNewFile()
-    new DataFile(nextNum, file)
+  //从文件中去掉corrupted的片段，把完好的片段衔接起来
+  def recover(file: DataFile) = {
+    val reader = accessorPool.openDataFileAccessor(file)
+    val randomAccessFile = file.openRandomAccessFile
+    try {
+      val corruptedBlocks = file.corruptedBlocks.reverse
+      recover(corruptedBlocks, file.getLength, reader, randomAccessFile)
+    }finally {
+      accessorPool.closeDataFileAccessor(reader)
+      randomAccessFile.close()
+    }
+    file
   }
+}
+object WalAct {
+  val accessorPool = new DataFileAccessorPool
+  val timer = new Timer("all Journal Scheduler")
+  val task = new TimerTask {
 
+    override def run {
+      accessorPool.disposeUnused
+    }
+  }
+  timer.scheduleAtFixedRate(task, DEFAULT_CLEANUP_INTERVAL, DEFAULT_CLEANUP_INTERVAL)
 }

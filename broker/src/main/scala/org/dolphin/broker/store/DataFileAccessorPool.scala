@@ -44,6 +44,16 @@ class DataFileAccessorPool {
       })
     }
 
+    def isUsed = this.synchronized(used)
+
+    def dispose {
+      this.synchronized{
+        pool.foreach(_.dispose)
+        pool = List.empty[DataFileAccessor]
+        disposed = true
+      }
+    }
+
   }
 
   def openDataFileAccessor(file:DataFile) = {
@@ -62,6 +72,21 @@ class DataFileAccessorPool {
       case Nil => reader.dispose
       case Some(_) if (closed) => reader.dispose
       case Some(p) => p.closeDataFileReader(reader)
+    }
+  }
+
+  def disposeUnused {
+    this.synchronized{
+      var map = Map.empty[Int, Pool]
+      pools.foreach(entry => {
+        val pool = entry._2
+        if (!pool.isUsed){
+          pool.dispose
+        }else {
+          map += entry
+        }
+      })
+      pools = map
     }
   }
 

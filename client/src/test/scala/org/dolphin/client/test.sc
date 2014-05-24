@@ -1,5 +1,3 @@
-import scala.collection.SortedSet
-import scala.concurrent.Future
 
 /**
  * User: bigbully
@@ -7,14 +5,8 @@ import scala.concurrent.Future
  * Time: 下午11:45
  */
 
-var list = List.empty[Long]
-(0 to 10000000).foreach(list ::= _)
-val start = System.currentTimeMillis()
-list.reduceRight(_ + _)
-val end = System.currentTimeMillis()
-println(end - start)
-
-var map = Map.empty
-map.reduceRight()
-var set = Set.empty
-set.reduceRight()
+val a = Integer.MAX_VALUE
+val b = "00002".toInt
+var c = "000" + "2"
+var f  = 33
+var d = ("0" * (10 - f.toString.length)) + f

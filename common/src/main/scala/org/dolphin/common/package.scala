@@ -13,4 +13,7 @@ package object common {
   val ENROLL_ACT_NAME = "enrollAct"
   val REGISTER_SUCCESS = "registerSuccess"
 
+  def generateStrId(id:Int) = {
+    ("0" * (10 - id.toString.length)) + id
+  }
 }

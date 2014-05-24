@@ -22,10 +22,10 @@ class BrokerRouterAct(val clusterName:String) extends Actor with ActorLogging{
 
   override def receive: Actor.Receive = {
     case RegisterBroker(broker) => {
-      child(broker.id.toString) match {
+      child(generateStrId(broker.id)) match {
         case Some(brokerAct) => log.error("存在相同的broker:{}, 不继续创建!", broker)
         case None => {
-          actorOf(Props(classOf[BrokerAct], broker), broker.id.toString) ! REGISTER_SUCCESS
+          actorOf(Props(classOf[BrokerAct], broker), generateStrId(broker.id)) ! REGISTER_SUCCESS
           log.info("成功注册了一个broker{}", broker)
         }
       }
