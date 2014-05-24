@@ -15,8 +15,10 @@ class StoreAct(storeParams: Map[String, String]) extends Actor {
   import context._
 
   var topicRouterAct: ActorRef = _
+  var walAct: ActorRef = _
 
   override def receive: Actor.Receive = {
+    case Init => walAct ! Init
     case FindExistentTopics => topicRouterAct ! FindExistentTopics
     case mail@CreateTopic(topicModel) => topicRouterAct ! mail
   }
@@ -24,5 +26,6 @@ class StoreAct(storeParams: Map[String, String]) extends Actor {
   @throws[Exception](classOf[Exception])
   override def preStart() {
     topicRouterAct = actorOf(Props(classOf[TopicRouterAct], storeParams), TOPIC_ROUTER_ACT_NAME)
+    walAct = actorOf(Props(classOf[WalAct], storeParams), WAL_ACT_NAME)
   }
 }

@@ -48,5 +48,6 @@ class EnrollAct(brokerModel: BrokerModel, params: Map[String, String]) extends A
   override def preStart() {
     metricAct = actorOf(Props(classOf[MetricAct]), METRIC_ACT_NAME)
     storeAct = actorOf(Props(classOf[StoreAct], params), STORE_ACT_NAME)
+    storeAct ! Init
   }
 }

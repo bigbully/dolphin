@@ -7,4 +7,8 @@ package org.dolphin.Util
  */
 class DolphinException(msg:String) extends RuntimeException(msg){
 
+  def this(e:Exception) {
+    this(e.getMessage)
+  }
+
 }
