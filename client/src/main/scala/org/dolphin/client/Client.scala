@@ -10,5 +10,6 @@ import akka.actor.ActorRef
 class Client(val id: String, val conf: ClientConfig) {
 
   var enrollAct:ActorRef = _
-
+  var brokerRouter:ActorRef = _
+  var topic:String = _
 }

@@ -14,7 +14,7 @@ object Dependencies {
   def runtime   (deps: ModuleID*): Seq[ModuleID] = deps map (_ % "runtime")
   def container (deps: ModuleID*): Seq[ModuleID] = deps map (_ % "container")
 
-  val scalaTest =  "org.scalatest" %% "scalatest" % "2.0.RC1"
+  lazy val scalaTest =  "org.scalatest" %% "scalatest" % "2.0.RC1"
   lazy val akka_actor = "com.typesafe.akka" %% "akka-actor" % "2.3.2"
   lazy val akka_slf4j = "com.typesafe.akka" %% "akka-slf4j" % "2.3.2"
   lazy val akka_testkit = "com.typesafe.akka" %% "akka-testkit" % "2.3.2"

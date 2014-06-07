@@ -1,12 +1,13 @@
 package org.dolphin.broker.actor
 
-import akka.actor.{ActorLogging, Actor}
+import akka.actor.{ActorIdentity, Identify, ActorLogging, Actor}
 import org.dolphin.broker.store._
 import org.dolphin.broker._
 import java.io.{RandomAccessFile, IOException}
 import java.util.zip.Adler32
 import WalAct._
 import java.util.{TimerTask, Timer}
+import org.dolphin.mail.SendBatchMessage
 
 /**
  * User: bigbully
@@ -16,7 +17,17 @@ import java.util.{TimerTask, Timer}
 class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
   import context._
 
+  val timer = new Timer("all Journal Scheduler")
+  val task = new TimerTask {
+
+    override def run {
+      accessorPool.disposeUnused
+    }
+  }
+  timer.scheduleAtFixedRate(task, DEFAULT_CLEANUP_INTERVAL, DEFAULT_CLEANUP_INTERVAL)
+
   override def receive: Actor.Receive = {
+    case Identify(GetDataFile) => sender ! ActorIdentity(dataFile, Some(self))
     case CheckFile => {
       recoveryCheck(dataFile)
       parent ! CheckFileFinished
@@ -137,7 +148,7 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
   }
 
   //从文件中去掉corrupted的片段，把完好的片段衔接起来
-  def recover(file: DataFile) = {
+  def recover(file: DataFile):DataFile = {
     val reader = accessorPool.openDataFileAccessor(file)
     val randomAccessFile = file.openRandomAccessFile
     try {
@@ -150,14 +161,4 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
     file
   }
 }
-object WalAct {
-  val accessorPool = new DataFileAccessorPool
-  val timer = new Timer("all Journal Scheduler")
-  val task = new TimerTask {
 
-    override def run {
-      accessorPool.disposeUnused
-    }
-  }
-  timer.scheduleAtFixedRate(task, DEFAULT_CLEANUP_INTERVAL, DEFAULT_CLEANUP_INTERVAL)
-}

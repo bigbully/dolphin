@@ -65,21 +65,22 @@ class AsyncProducer(private[this] val id: String, private[this] val conf: Client
       full = batch.size >= batchSize
       if (full || expired){
         lastSend = System.currentTimeMillis()
-        enrollAct ! SendBatchMessage(batch)
+        brokerRouter ! SendBatchMessage(batch)
         batch = new ArrayBuffer[Message]
       }
     }
     //发送最后一批消息
-    enrollAct ! SendBatchMessage(batch)
+    brokerRouter ! SendBatchMessage(batch)
     if (queue.size > 0) throw new DolphinException("异步客户端结束异常，不应该有残留的消息!")
   }
 
   override def publish(topic: String, cluster: String) {
+    this.topic = topic
     val topicModel = TopicModel(topic, cluster)
     enrollAct ! RegisterClient(this, ClientModel(id, PRODUCER), topicModel)
   }
 
   override def send(msg: Array[Byte]) {
-    enqueueStrategy(Message(msg))
+    enqueueStrategy(Message(msg, this.topic.getBytes(UTF_8), None, false))
   }
 }

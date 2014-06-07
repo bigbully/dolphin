@@ -13,7 +13,7 @@ class ClientRouterAct extends Actor{
 
   override def receive: Actor.Receive = {
     case CreateClient(client) => {
-      client.enrollAct = actorOf(Props(classOf[EnrollAct]), client.id)
+      client.enrollAct = actorOf(Props(classOf[EnrollAct], client.conf), client.id)
     }
   }
 }

@@ -11,17 +11,20 @@ import org.dolphin.broker.store.{DataFileAccessorPool, DataByteArrayOutputStream
  */
 package object broker {
   val REGISTER = "register"
-  val STORE_ACT_NAME = "storeAct"
+
   val METRIC_ACT_NAME = "metricAct"
   val ACTOR_ROOT_PATH = "/user/enrollAct"
   val TOPIC_ROUTER_ACT_NAME = "topicRouterAct"
-  val WAL_ACT_NAME = "walAct"
+  val WAL_ROUTER_ACT_NAME = "walRouterAct"
+  val DATA_CARRIER_ACT_NAME = "dataCarrierAct"
+  val DATA_CARRIER_FILE_ACT_NAME = "data-carrier"
 
   val FindExistentTopics = "findExistentTopics"
   val CheckFile = "checkFile"
   val CheckFileFinished = "checkFileFinished"
   val Init = "init"
   val InitFinished = "initFinished"
+  val GetDataFile = "getDataFile"
 
   val DEFAULT_CLEANUP_INTERVAL = 1000 * 30
 
@@ -60,11 +63,21 @@ package object broker {
   }
   val BATCH_CONTROL_RECORD_HEADER_LENGTH = BATCH_CONTROL_RECORD_HEADER.length
 
+  //wal文件专用
+  val accessorPool = new DataFileAccessorPool
+
   def bytes(str:String) = {
     try {
       str.getBytes("UTF-8")
     }catch {
       case e:UnsupportedEncodingException => throw new DolphinException(e)
     }
+  }
+
+  def getWalFileName(id:String) = {
+    FILE_PREFIX + id + FILE_SUFFIX
+  }
+  def getWalFilePath(path:String, fileName:String) = {
+    path + "/" + fileName
   }
 }

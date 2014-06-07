@@ -19,6 +19,10 @@ class DataFile(val id:Int, private[this] val file:File) extends Ordered[DataFile
     this.synchronized(new RandomAccessFile(file, "rw"))
   }
 
+  def closeRandomAccessFile(file:RandomAccessFile) {
+    this.synchronized(file.close())
+  }
+
   def addCorruptedBlocks(sequence:(Int, Int)) {
     corruptedBlocks ::= sequence
   }
@@ -28,5 +32,9 @@ class DataFile(val id:Int, private[this] val file:File) extends Ordered[DataFile
   def setLength(length:Int) {this.length = length}
 
   def getLength = this.synchronized(length.asInstanceOf[Int])
+
+  def incrementLength(size:Int) {
+    this.synchronized(length += size)
+  }
 
 }

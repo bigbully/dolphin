@@ -2,6 +2,7 @@ package org.dolphin.client.producer
 
 import akka.actor.{Actor, ActorSystem, ActorRef}
 import org.dolphin.client.{Client, ClientConfig}
+import org.dolphin.domain.BrokerModel
 
 
 /**

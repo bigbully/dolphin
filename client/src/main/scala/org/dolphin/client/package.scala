@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 package object client {
 
+  val BROKER_GROUP_ACT_NAME = "brokerGroupAct"
   val BROKER_ROUTER_ACT_NAME = "brokerRouterAct"
   val CLIENT_ROUTER_ACT_NAME = "clientRouterAct"
   val ACTOR_ROOT_PATH = "/user/enrollAct"
@@ -21,6 +22,10 @@ package object client {
   val QUEUE_BUFFERING_MAX_MESSAGES = "queue.buffering.max.messages"
   val BATCH_NUM_MESSAGES = "batch.num.messages"
   val FAIL_TO_SEND_AND_THEN = "fail.to.send.and.then"
+  val SEND_STRATEGY = "send.strategy"
+  val ROUND_ROBIN = "round-robin"
+  val SMALLEST_MAILBOX = "smallest-mailbox"
+  val RANDOM = "random"
   val ASYNC = "async"
   val SYNC = "sync"
   private val num = new AtomicLong(0)

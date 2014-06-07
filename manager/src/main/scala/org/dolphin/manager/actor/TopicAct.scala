@@ -1,12 +1,9 @@
 package org.dolphin.manager.actor
 
-import akka.actor.{ActorLogging, ActorPath, Actor}
-import org.dolphin.domain.{BrokerModel, ClientModel, TopicModel}
-import org.dolphin.common._
+import akka.actor.{ActorLogging, Actor}
 import org.dolphin.manager._
 import org.dolphin.manager.mail._
 import org.dolphin.manager.domain.{Broker, Topic, Client}
-import org.dolphin.mail.{ClientRegisterSuccess, TopicCreated, CreateTopic}
 import org.dolphin.manager.mail.FindLazyBrokers
 import org.dolphin.manager.mail.TopicFromBroker
 import org.dolphin.manager.mail.LazyBrokersForTopic
@@ -19,7 +16,8 @@ import org.dolphin.manager.mail.TopicFromClient
  * Date: 14-4-29
  * Time: 下午6:09
  */
-class TopicAct(topic: Topic) extends Actor with ActorLogging{
+class TopicAct(topic: Topic) extends Actor with ActorLogging {
+
   import context._
 
   var clientMap = Map.empty[String, String]
@@ -44,7 +42,7 @@ class TopicAct(topic: Topic) extends Actor with ActorLogging{
       brokerMap += (broker.id -> broker.asInstanceOf[Broker].path)
       log.info("topic:{}现在创建在以下broker列表中:{}", topic, brokerMap)
       //把某个broker上topic创建成功的消息依次通知与topic关联的client
-      clientMap.values.foreach(actorSelection(_) ! ClientRegisterSuccess(List(broker.model)))
+      clientMap.values.foreach(actorSelection(_) ! ClientRegisterSuccess(topic.model, List(broker.model)))
     }
   }
 

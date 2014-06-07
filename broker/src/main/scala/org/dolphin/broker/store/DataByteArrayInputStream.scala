@@ -9,8 +9,8 @@ import java.io.{DataInput, InputStream}
  */
 class DataByteArrayInputStream(private var buf: Array[Byte]) extends InputStream with DataInput {
 
-  private var pos: Int = _
-  private val offset: Int = _
+  private var pos = 0
+  private val offset  = 0
   private var length = buf.length
 
   private val work = new Array[Byte](8)
@@ -75,12 +75,12 @@ class DataByteArrayInputStream(private var buf: Array[Byte]) extends InputStream
    *         <code>-1</code> if there is no more data because the end of the
    *         stream has been reached.
    */
-  override def read(b: Array[Byte], off: Int, len: Int) = {
+  override def read(b: Array[Byte], off: Int, len: Int):Int = {
     if (b == null) throw new NullPointerException
 
     if (pos >= length) return -1
     if (len <= 0) return 0
-    var newLen: Int = _
+    var newLen: Int = 0
     if (pos + len > length) {
       newLen = length - pos
     } else {
@@ -97,9 +97,9 @@ class DataByteArrayInputStream(private var buf: Array[Byte]) extends InputStream
 
   def readFully(b: Array[Byte], off: Int, len: Int) = read(b, off, len)
 
-  def skipBytes(n:Int) = {
+  def skipBytes(n:Int):Int = {
     if (n < 0) return 0
-    var newN:Int = _
+    var newN = 0
     if (pos + n > length) {
       newN = length - pos
     }else {

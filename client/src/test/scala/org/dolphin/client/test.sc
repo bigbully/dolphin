@@ -1,12 +1,28 @@
+import akka.actor._
+import akka.actor.ActorIdentity
+import akka.actor.Identify
+import scala.Some
+class WorkAct(id:Int) extends Actor {
+  override def receive: Actor.Receive = {
+    case Identify(msgId) => sender ! ActorIdentity(id, Some(self))
+    case "SUCCESS" => println("yes")
+  }
+}
+class MainAct extends Actor{
+  import context._
 
-/**
- * User: bigbully
- * Date: 14-5-4
- * Time: 下午11:45
- */
+  override def receive: Actor.Receive = {
+    case ActorIdentity(id, Some(ref)) => ref ! "SUCCESS"
+    case ActorIdentity(id, None) => println("nonono")
+    case "Start" => {
+      println("start")
+      actorSelection("/user/1") ! Identify(1)
+    }
+  }
+}
 
-val a = Integer.MAX_VALUE
-val b = "00002".toInt
-var c = "000" + "2"
-var f  = 33
-var d = ("0" * (10 - f.toString.length)) + f
+val system = ActorSystem("test")
+
+val mainAct = system.actorOf(Props(classOf[MainAct]), "main")
+val workAct = system.actorOf(Props(classOf[WorkAct], 1), "1")
+mainAct ! "Start"

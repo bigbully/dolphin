@@ -234,4 +234,8 @@ final class DataByteArrayOutputStream(val size:Int) extends OutputStream with Da
       buf = newbuf
     }
   }
+  def skip(size:Int) {
+    ensureEnoughBuffer(pos + size)
+    pos+=size
+  }
 }

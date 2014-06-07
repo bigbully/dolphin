@@ -42,4 +42,11 @@ object DolphinBuild extends Build {
       compile(akka_actor, akka_remote, akka_slf4j, quartz) ++
       test(scalaTest, akka_testkit))
     .dependsOn(common)
+
+  lazy val integration = Project(id = "integration", base = file("integration"))
+    .settings(basicSettings: _*)
+    .settings(libraryDependencies ++=
+    compile(akka_actor, akka_remote, akka_slf4j, quartz) ++
+      test(scalaTest, akka_testkit))
+    .dependsOn(common)
 }

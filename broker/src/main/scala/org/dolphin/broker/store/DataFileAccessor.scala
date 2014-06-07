@@ -13,6 +13,10 @@ class DataFileAccessor(val dataFile:DataFile) {
 
   }
 
+  def readFully(data:Array[Byte]){
+    file.readFully(data)
+  }
+
   def readFully(offset:Long, data:Array[Byte]) {
     file.seek(offset)
     file.readFully(data)
@@ -22,5 +26,7 @@ class DataFileAccessor(val dataFile:DataFile) {
     file.seek(offset)
     file.read(data)
   }
+
+  def getFile = file
 
 }

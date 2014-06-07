@@ -24,15 +24,15 @@ class SyncProducer(private[this] val id: String, private[this] val conf: ClientC
   def publishAndWaiting(topic: String, cluster: String)(implicit waiting: Waiting) {
     implicit val timeout = Timeout(waiting.seconds, TimeUnit.SECONDS)
     val topicModel = TopicModel(topic, cluster)
-    val brokerModelList = enrollAct ? RegisterClient(this, ClientModel(id, PRODUCER), topicModel)
+    val response = enrollAct ? RegisterClient(this, ClientModel(id, PRODUCER), topicModel)
 
-    brokerModelList onSuccess {
-      case ClientRegisterSuccess(list) => log.info("注册topic:{}成功，broker列表为{}", topicModel, list)
+    response onSuccess {
+      case REGISTER_SUCCESS => log.info("注册topic:{}完成", topicModel)
       case ex: Exception =>
         log.error("注册topic:{}失败，失败信息为:{}", topicModel, ex.getMessage)
         throw ex
     }
-    brokerModelList onFailure {
+    response onFailure {
       case ex =>
         log.error("注册topic:{}超时!", topicModel)
         throw ex
