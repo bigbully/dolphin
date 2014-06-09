@@ -6,10 +6,12 @@ import org.dolphin.common._
 import java.io.{EOFException, IOException, RandomAccessFile}
 import org.dolphin.broker.store.{DataByteArrayInputStream, DataFile, DataFileAccessor}
 import java.util.zip.{Adler32, Checksum}
-import org.dolphin.broker.mail.{WriteDataCarrierFile, DistributeToTopic}
+import org.dolphin.broker.mail.{ReturnDataFile, GetDataFile, WriteDataCarrierFile, DistributeToTopic}
 import akka.actor.ActorIdentity
 import scala.Some
 import akka.actor.Identify
+import java.util.concurrent.{SynchronousQueue, Executors, TimeUnit, ThreadPoolExecutor}
+import com.jd.bdp.whale.communication.util.AbortPolicyWithReport
 
 /**
  * User: bigbully
@@ -21,45 +23,76 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
   import context._
 
   val dataCarrierFile = new RandomAccessFile(storeParams.get("path") + "/journal/"+DATA_CARRIER_FILE_ACT_NAME + FILE_SUFFIX, "rw")
-  var walFileId: String = _
-  var readOffset: Long = _
-  var curDataFileAccessor: DataFileAccessor = _
   var dataCarrierFileAct:ActorRef = _
+  //单线程顺序读取wal文件
+  private val pool = new ThreadPoolExecutor(1, 1, 3L, TimeUnit.SECONDS, new SynchronousQueue[Runnable], Executors.defaultThreadFactory)
 
   override def receive: Actor.Receive = {
     case Init => {
       val dataCarrierInfo = dataCarrierFile.readLine()
       if (dataCarrierInfo != null) {
         val infoArray = dataCarrierInfo.split("\\|")
-        walFileId = infoArray(0)
-        readOffset = infoArray(1).toLong
-        curWalAct ! Identify(walFileId)
-        dataCarrierFileAct = actorOf(Props(classOf[DataCarrierFileAct], dataCarrierFile), DATA_CARRIER_FILE_ACT_NAME)
+        val walFileId = infoArray(0)
+        val readOffset = infoArray(1).toLong
+        curWalAct(walFileId) ! Identify(GetDataFile(readOffset))
       }
     }
-    case ActorIdentity(dataFile, Some(walAct)) => {
-      accessorPool.openDataFileAccessor(dataFile.asInstanceOf[DataFile])
+    case ActorIdentity(ReturnDataFile(dataFile, readOffset), Some(walAct)) => {
+      val curDataFileAccessor = accessorPool.openDataFileAccessor(dataFile.asInstanceOf[DataFile])
       curDataFileAccessor.getFile.seek(readOffset)
+      dataCarrierFileAct = actorOf(Props(classOf[DataCarrierFileAct], dataCarrierFile), DATA_CARRIER_FILE_ACT_NAME)
 
+      val task = new CarrierTask(readOffset, curDataFileAccessor, walAct.path.name)
+      pool.execute(task)
     }
-    case ActorIdentity(_, None) => log.error("dataCarrier初始化失败，找不到编号为{}的wal文件!", name)
+    case ActorIdentity(name, None) => log.error("dataCarrier初始化失败，找不到编号为{}的wal文件!", name)
   }
 
-
-
-  class CarrierThread extends Thread {
-    this.setName("CarrierThread")
-
-    override def run {
-      while (true) {
+  //递归的读取wal文件
+  def recursiveReadWal(readOffset:Long, curDataFileAccessor:DataFileAccessor, walFileId:String){
+    try {      
+      val (stream, offset) = readBatchJournal(readOffset, curDataFileAccessor)
+      distribute(stream)
+      dataCarrierFileAct ! WriteDataCarrierFile(walFileId, readOffset)
+      recursiveReadWal(offset, curDataFileAccessor, walFileId)
+    }catch {
+      case eof:EOFException => {
         try {
-          distribute(readBatchJournal)
-          dataCarrierFileAct ! WriteDataCarrierFile(walFileId, readOffset)
-        } catch {
-          case eof: EOFException => //todo切换
+          if (readOffset == curDataFileAccessor.getFile.length()){
+            //todo 如何处理写现成创建act未完成的情况
+            curWalAct(nextWalFileId(walFileId)) ! Identify(GetDataFile(readOffset))
+          }else {
+            waitALittleWhileAndContinue(readOffset, curDataFileAccessor, walFileId)
+          }
+        }catch {
+          case e:Throwable => {
+            log.error("切换wal文件时发生异常!继续进行读取!", e)
+            recursiveReadWal(readOffset, curDataFileAccessor, walFileId)
+          }
         }
       }
+      case readBatchException:ReadBatchException => waitALittleWhileAndContinue(readOffset, curDataFileAccessor, walFileId)
+      case e => {
+        log.error("递归读取wal文件时发生异常!继续进行读取!", e)
+        recursiveReadWal(readOffset, curDataFileAccessor, walFileId)
+      }
     }
+  }
+
+  class CarrierTask(readOffset:Long, curDataFileAccessor:DataFileAccessor, walFileId:String) extends Runnable {
+
+    override def run() {
+      recursiveReadWal(readOffset, curDataFileAccessor, walFileId)
+    }
+  }
+
+  def waitALittleWhileAndContinue(readOffset:Long, curDataFileAccessor:DataFileAccessor, walFileId:String){
+    Thread.sleep(10)
+    recursiveReadWal(readOffset, curDataFileAccessor, walFileId)
+  }
+
+  def nextWalFileId(walFileId:String) = {
+    generateStrId(walFileId.toInt + 1)
   }
 
   def distribute(stream: DataByteArrayInputStream) {
@@ -85,7 +118,7 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
     }
   }
 
-  def readBatchJournal: DataByteArrayInputStream = {
+  def readBatchJournal(readOffset:Long, curDataFileAccessor:DataFileAccessor): (DataByteArrayInputStream, Long)= {
     //步骤1:读取批量消息头信息
     val head = new Array[Byte](BATCH_CONTROL_RECORD_HEADER_LENGTH)
     val headStream = new DataByteArrayInputStream(head)
@@ -163,8 +196,8 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
     }
 
     stream.restart
-    readOffset += BATCH_CONTROL_RECORD_SIZE + size + BATCH_TAIL_RECORD_MAGIC_LENGTH
-    stream
+    val offset = readOffset + BATCH_CONTROL_RECORD_SIZE + size + BATCH_TAIL_RECORD_MAGIC_LENGTH
+    (stream, offset)
   }
 
   def checkTheSum(data:Array[Byte], expect:Long) = {
@@ -181,7 +214,7 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
   val CurWalActPathPrefix = ACTOR_ROOT_PATH + "/" + STORE_ACT_NAME + "/" + WAL_ROUTER_ACT_NAME + "/"
 
   def topicAct(topic:String) = actorSelection(TopicActPathPrefix + topic)
-  def curWalAct = actorSelection(CurWalActPathPrefix + walFileId)
+  def curWalAct(walFileId:String) = actorSelection(CurWalActPathPrefix + walFileId)
 
 
   class ReadBatchException(msg: String) extends Exception(msg)

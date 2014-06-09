@@ -8,6 +8,7 @@ import java.util.zip.Adler32
 import WalAct._
 import java.util.{TimerTask, Timer}
 import org.dolphin.mail.SendBatchMessage
+import org.dolphin.broker.mail.{ReturnDataFile, GetDataFile}
 
 /**
  * User: bigbully
@@ -27,7 +28,7 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
   timer.scheduleAtFixedRate(task, DEFAULT_CLEANUP_INTERVAL, DEFAULT_CLEANUP_INTERVAL)
 
   override def receive: Actor.Receive = {
-    case Identify(GetDataFile) => sender ! ActorIdentity(dataFile, Some(self))
+    case Identify(GetDataFile(readOffset)) => sender ! ActorIdentity(ReturnDataFile(dataFile, readOffset), Some(self))
     case CheckFile => {
       recoveryCheck(dataFile)
       parent ! CheckFileFinished

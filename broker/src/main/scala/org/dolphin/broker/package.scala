@@ -24,7 +24,6 @@ package object broker {
   val CheckFileFinished = "checkFileFinished"
   val Init = "init"
   val InitFinished = "initFinished"
-  val GetDataFile = "getDataFile"
 
   val DEFAULT_CLEANUP_INTERVAL = 1000 * 30
 
