@@ -22,7 +22,7 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
   val task = new TimerTask {
 
     override def run {
-      accessorPool.disposeUnused
+      walAccessorPool.disposeUnused
     }
   }
   timer.scheduleAtFixedRate(task, DEFAULT_CLEANUP_INTERVAL, DEFAULT_CLEANUP_INTERVAL)
@@ -38,10 +38,10 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
   def recoveryCheck(file: DataFile){
     var offset = 0
 
-    val reader = accessorPool.openDataFileAccessor(file)
+    val reader = walAccessorPool.openDataFileAccessor(file)
     try {
       while(true){
-        val size = checkBatchRecord(reader, 0)
+        val size = checkBatchRecord(reader, offset)
         if (size > 0){//如果这批消息没有问题
           offset = offset + BATCH_CONTROL_RECORD_SIZE + size + BATCH_TAIL_RECORD_MAGIC_LENGTH
         }else {//如果有问题
@@ -58,7 +58,7 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
     }catch {
       case e :IOException => //ignore
     }finally {
-      accessorPool.closeDataFileAccessor(reader)
+      walAccessorPool.closeDataFileAccessor(reader)
     }
     file.setLength(offset)
     if (file.isCorrupted) recover(file)
@@ -150,13 +150,13 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
 
   //从文件中去掉corrupted的片段，把完好的片段衔接起来
   def recover(file: DataFile):DataFile = {
-    val reader = accessorPool.openDataFileAccessor(file)
+    val reader = walAccessorPool.openDataFileAccessor(file)
     val randomAccessFile = file.openRandomAccessFile
     try {
       val corruptedBlocks = file.corruptedBlocks.reverse
       recover(corruptedBlocks, file.getLength, reader, randomAccessFile)
     }finally {
-      accessorPool.closeDataFileAccessor(reader)
+      walAccessorPool.closeDataFileAccessor(reader)
       randomAccessFile.close()
     }
     file

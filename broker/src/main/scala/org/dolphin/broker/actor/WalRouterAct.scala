@@ -11,6 +11,7 @@ import org.dolphin.domain.Message
 import java.util.concurrent.locks.ReentrantLock
 import org.dolphin.Util.DolphinException
 import java.util.concurrent.CountDownLatch
+import scala.annotation.tailrec
 
 
 /**
@@ -18,7 +19,7 @@ import java.util.concurrent.CountDownLatch
  * Date: 14-5-12
  * Time: 下午10:24
  */
-class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLogging {
+class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLogging with FileRouter{
 
   import context._
 
@@ -27,6 +28,8 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
   val walPath = path + "/journal"
   var walDir: File = _
   var waitingToBeCheck: AtomicInteger = _
+  val widget = FileWidget(walPath, WAL_PREFIX, WAL_SUFFIX)
+
 
   val lock = new ReentrantLock()
   val condition = lock.newCondition()
@@ -87,12 +90,12 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
     nextWriteBatch
   }
 
-  def recursiveEnqueue(write: WriteCommand) {
+  @tailrec final def recursiveEnqueue(write: WriteCommand) {
     nextWriteBatch match {
       case None => {
         //如果还未初始化batch或当前batch已经被取走，则创建一个batch
         var file = getCurrentWriteFile
-        if (file.getLength > DEFAULT_MAX_FILE_LENGTH) file = createNewFile
+        if (file.getLength > DEFAULT_MAX_FILE_LENGTH) file = createNewFile(children)
         nextWriteBatch = Some(new WriteBatch(file, file.getLength, write))
         condition.notifyAll //并通知等待的线程
       }
@@ -117,7 +120,7 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
   def getCurrentWriteFile = {
     this.synchronized {
       val fileId = children.toSeq.head.path.name
-      val file = new File(getWalFilePath(walPath, getWalFileName(fileId)))
+      val file = new File(getFilePath(fileId))
       new DataFile(fileId.toInt, file)
     }
   }
@@ -209,7 +212,7 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
     }
   }
 
-  def recursiveWriteToBuff(writeList: List[WriteCommand], buff: DataByteArrayOutputStream) {
+  @tailrec final def recursiveWriteToBuff(writeList: List[WriteCommand], buff: DataByteArrayOutputStream) {
     writeList match {
       case head :: tails => {
         buff.writeInt(head.topicSize)
@@ -225,7 +228,8 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
     }
   }
 
-  def exchange: WriteBatch = {
+  //todo shutdown的逻辑
+  @tailrec final def exchange: WriteBatch = {
     nextWriteBatch match {
       case Some(batch) => {
         batch.dataFile.incrementLength(BATCH_TAIL_RECORD_MAGIC_LENGTH)
@@ -234,11 +238,6 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
         return o
       }
       case None => exchange
-    }
-    if (shutdown) {
-      null
-    } else {
-      exchange
     }
   }
 
@@ -249,12 +248,11 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
 
     walDir = new File(walPath)
     if (!walDir.exists()) walDir.mkdir()
-    val files = walDir.listFiles.filter(file => file.isFile && file.getName.startsWith(FILE_PREFIX) && file.getName.endsWith(FILE_SUFFIX)).toSeq
+    val files = walDir.listFiles.filter(file => file.isFile && isFileAvailable(file.getName)).toSeq
 
-    //获得一个从大到小排列的sortedSet
     files match {
       case Nil => {
-        val newDataFile = createNewFile
+        val newDataFile = createNewFile(children)
         actorOf(Props(classOf[WalAct], newDataFile), generateStrId(newDataFile.id))
       }
       case _ => {
@@ -266,19 +264,6 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
       }
     }
     log.info("wal文件初始化完成!当前存在wal文件为:{}", children)
-  }
-
-  def getFileIndex(file: File) = {
-    val name = file.getName
-    name.substring(FILE_PREFIX.length, name.length - FILE_SUFFIX.length).toInt
-  }
-
-  def createNewFile = {
-    val seq = children.toSeq
-    val nextNum = if (seq.isEmpty) 1 else seq.head.path.name.toInt + 1
-    val file = new File(walDir, FILE_PREFIX + generateStrId(nextNum) + FILE_SUFFIX)
-    if (!file.exists()) file.createNewFile()
-    new DataFile(nextNum, file)
   }
 
   private case class WriteCommand(data: Array[Byte], topic: Array[Byte], subTopic: Option[Array[Byte]], sync: Boolean) {
@@ -313,8 +298,6 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
       newSize >= DEFAULT_MAX_WRITE_BATCH_SIZE ||
         offset + newSize + BATCH_TAIL_RECORD_MAGIC_LENGTH > DEFAULT_MAX_WRITE_BATCH_SIZE
     }
-
-
   }
 
 }

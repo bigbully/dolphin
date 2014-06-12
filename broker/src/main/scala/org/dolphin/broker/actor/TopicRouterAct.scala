@@ -8,6 +8,8 @@ import org.dolphin.broker._
 import scala.Some
 import org.dolphin.mail.CreateTopic
 import org.dolphin.broker.mail.ExistentTopics
+import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * User: bigbully
@@ -17,8 +19,10 @@ import org.dolphin.broker.mail.ExistentTopics
 class TopicRouterAct(storeParams:Map[String,String]) extends Actor with ActorLogging{
   import context._
 
+  val path = storeParams("path") + "/topics"
   val cluster = storeParams("cluster")
   val enrollAct = actorSelection(ACTOR_ROOT_PATH)
+  var waitingToBeCheck:AtomicInteger = _
 
   override def receive: Actor.Receive = {
     case mail@CreateTopic(topicModel)=> {
@@ -30,19 +34,34 @@ class TopicRouterAct(storeParams:Map[String,String]) extends Actor with ActorLog
     case FindExistentTopics => {
       val topics = findExistentTopics
       topics match {
-        case None => log.info("没找到任何现存的topic!")
+        case None => {
+          log.info("没找到任何现存的topic!")
+          enrollAct ! ExistentTopics(None)
+        }
         case Some(topics) => {
           log.info("找到现存的topic为:{}", topics)
-          topics.foreach(topicModel => actorOf(Props(classOf[TopicAct], topicModel), topicModel.name))
+          waitingToBeCheck = new AtomicInteger(topics.size)
+          topics.foreach(topicModel => actorOf(Props(classOf[TopicAct], topicModel, storeParams), topicModel.name) ! CheckFile)
         }
       }
-      enrollAct ! ExistentTopics(topics)
+
+    }
+    case InitFinished => {
+      val remainder = waitingToBeCheck.decrementAndGet()
+      if (remainder == 0) {
+        enrollAct ! ExistentTopics(Some(children.toList.map(actorRef => TopicModel(actorRef.path.name, cluster))))
+      }
     }
   }
 
-  //todo
   def findExistentTopics:Option[List[TopicModel]] = {
-    None
+    val topicRouterDir = new File(path)
+    if (!topicRouterDir.exists()){//创建topicRouter目录
+      topicRouterDir.mkdir()
+      None
+    }else {
+      Some(topicRouterDir.listFiles().map(file => TopicModel(file.getName, cluster)).toList)
+    }
   }
 
 }

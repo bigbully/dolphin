@@ -12,6 +12,7 @@ import scala.Some
 import akka.actor.Identify
 import java.util.concurrent.{SynchronousQueue, Executors, TimeUnit, ThreadPoolExecutor}
 import com.jd.bdp.whale.communication.util.AbortPolicyWithReport
+import scala.annotation.tailrec
 
 /**
  * User: bigbully
@@ -38,7 +39,7 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
       }
     }
     case ActorIdentity(ReturnDataFile(dataFile, readOffset), Some(walAct)) => {
-      val curDataFileAccessor = accessorPool.openDataFileAccessor(dataFile.asInstanceOf[DataFile])
+      val curDataFileAccessor = walAccessorPool.openDataFileAccessor(dataFile.asInstanceOf[DataFile])
       curDataFileAccessor.getFile.seek(readOffset)
       dataCarrierFileAct = actorOf(Props(classOf[DataCarrierFileAct], dataCarrierFile), DATA_CARRIER_FILE_ACT_NAME)
 
@@ -49,34 +50,40 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
   }
 
   //递归的读取wal文件
-  def recursiveReadWal(readOffset:Long, curDataFileAccessor:DataFileAccessor, walFileId:String){
-    try {      
+  @tailrec final def recursiveReadWal(readOffset:Long, curDataFileAccessor:DataFileAccessor, walFileId:String){
+    val nextOffset = try {
       val (stream, offset) = readBatchJournal(readOffset, curDataFileAccessor)
       distribute(stream)
       dataCarrierFileAct ! WriteDataCarrierFile(walFileId, readOffset)
-      recursiveReadWal(offset, curDataFileAccessor, walFileId)
+      offset
     }catch {
       case eof:EOFException => {
         try {
           if (readOffset == curDataFileAccessor.getFile.length()){
             //todo 如何处理写现成创建act未完成的情况
-            curWalAct(nextWalFileId(walFileId)) ! Identify(GetDataFile(readOffset))
+            curWalAct(nextWalFileId(walFileId)) ! Identify(GetDataFile(0))
+            return
           }else {
-            waitALittleWhileAndContinue(readOffset, curDataFileAccessor, walFileId)
+            Thread.sleep(10)
+            readOffset
           }
         }catch {
           case e:Throwable => {
             log.error("切换wal文件时发生异常!继续进行读取!", e)
-            recursiveReadWal(readOffset, curDataFileAccessor, walFileId)
+            readOffset
           }
         }
       }
-      case readBatchException:ReadBatchException => waitALittleWhileAndContinue(readOffset, curDataFileAccessor, walFileId)
+      case readBatchException:ReadBatchException => {
+        Thread.sleep(10)
+        readOffset
+      }
       case e => {
         log.error("递归读取wal文件时发生异常!继续进行读取!", e)
-        recursiveReadWal(readOffset, curDataFileAccessor, walFileId)
+        readOffset
       }
     }
+    recursiveReadWal(nextOffset, curDataFileAccessor, walFileId)
   }
 
   class CarrierTask(readOffset:Long, curDataFileAccessor:DataFileAccessor, walFileId:String) extends Runnable {
@@ -113,7 +120,7 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
       }
       val size = stream.readInt
       val data = new Array[Byte](size)
-      topicAct(topic) ! DistributeToTopic(topic, subTopic, data)
+      topicAct(topic) ! DistributeToTopic(subTopic, data)
       offset += 3 * INT_LENGTH + topicSize + subTopicSize + size
     }
   }

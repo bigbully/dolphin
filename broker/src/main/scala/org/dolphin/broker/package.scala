@@ -1,8 +1,10 @@
 package org.dolphin
 
-import java.io.{IOException, UnsupportedEncodingException}
+import java.io.{File, IOException, UnsupportedEncodingException}
 import org.dolphin.Util.DolphinException
-import org.dolphin.broker.store.{DataFileAccessorPool, DataByteArrayOutputStream}
+import org.dolphin.broker.store.{DataFile, DataFileAccessorPool, DataByteArrayOutputStream}
+import scala.collection.immutable
+import akka.actor.ActorRef
 
 /**
  * User: bigbully
@@ -29,10 +31,12 @@ package object broker {
 
   val DEFAULT_MAX_FILE_LENGTH: Int = 1024 * 1024 * 100
   val DEFAULT_MAX_WRITE_BATCH_SIZE = 1024 * 1024 * 8
-  val FILE_PREFIX = "db-"
-  val FILE_SUFFIX = ".log"
+  val WAL_PREFIX = "db-"
+  val WAL_SUFFIX = ".log"
+  val TOPIC_PREFIX = "db-"
+  val TOPIC_SUFFIX = ".log"
 
-  //wal文件遵循的协议格式
+  //wal文件遵循的格式
   val INT_LENGTH = 4
   val LONG_LENGTH = 8
   val BYTE_LENGTH = 1
@@ -61,9 +65,17 @@ package object broker {
     }
   }
   val BATCH_CONTROL_RECORD_HEADER_LENGTH = BATCH_CONTROL_RECORD_HEADER.length
+  val walAccessorPool = new DataFileAccessorPool
 
-  //wal文件专用
-  val accessorPool = new DataFileAccessorPool
+
+  //topic文件遵循的格式
+  val MAGIC_HEAD = Array[Byte](10, 10)
+  val MAGIC_HEAD_LENGTH = MAGIC_HEAD.length
+  val MAGIC_TAIL = Array[Byte](20, 30, 30, 30, 30, 20)
+  val MAGIC_TAIL_LENGTH = MAGIC_TAIL.length
+
+  val topicAccessorPool = new DataFileAccessorPool
+
 
   def bytes(str:String) = {
     try {
@@ -73,10 +85,35 @@ package object broker {
     }
   }
 
-  def getWalFileName(id:String) = {
-    FILE_PREFIX + id + FILE_SUFFIX
-  }
-  def getWalFilePath(path:String, fileName:String) = {
-    path + "/" + fileName
+  case class FileWidget(prefix:String, suffix:String, path:String)
+
+  trait FileRouter {
+
+    def getFileIndex(file: File)(implicit widget:FileWidget) = {
+      val name = file.getName
+      name.substring(widget.prefix.length, name.length - widget.suffix.length).toInt
+    }
+
+    def createNewFile(children:immutable.Iterable[ActorRef])(implicit widget:FileWidget) = {
+      val seq = children.toSeq
+      val nextNum = if (seq.isEmpty) 1 else seq.head.path.name.toInt + 1
+      val file = new File(widget.path, widget.prefix + org.dolphin.common.generateStrId(nextNum) + widget.suffix)
+      if (!file.exists()) file.createNewFile()
+      new DataFile(nextNum, file)
+    }
+
+    def getFileName(id:String)(implicit widget:FileWidget)  = {
+      widget.prefix + id + widget.suffix
+    }
+
+    def getFilePath(id:String)(implicit widget:FileWidget) = {
+      widget.path + "/" + getFileName(id)
+    }
+
+    def isFileAvailable(name:String)(implicit widget:FileWidget) = {
+      name.startsWith(widget.prefix) && name.endsWith(widget.suffix)
+    }
   }
 }
+
+
