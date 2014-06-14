@@ -1,13 +1,5 @@
-def recursiveTest(a:String) {
-  val b = try {
-    a.toInt + 1
-  }catch {
-    case e:Exception => {
-      return
-    }
-  }
-  println(b)
-  recursiveTest(b.toString)
-}
+var map = Map.empty[Int, String]
+map += (1 -> "abc")
 
-recursiveTest("a")
+map.get(1).isInstanceOf[String]
+map.get(2).isInstanceOf[String]

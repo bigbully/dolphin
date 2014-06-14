@@ -34,17 +34,18 @@ class TopicIndexAct(topicModel: TopicModel, storeParams: Map[String, String], da
   }
 
   @tailrec private def recursiveCheck(reader: DataFileAccessor, offset: Int): Int = {
-    val size = checkTopicFile(reader, offset)
-    if (size > 0) {
-      try {
-        recursiveCheck(reader, offset + MAGIC_HEAD_LENGTH + size + MAGIC_TAIL_LENGTH)
-      } catch {
-        case e: IOException => return offset //当读完文件时退出
+    val size = try {
+      val mySize = checkTopicFile(reader, offset)
+      if (mySize <= 0){
+        truncate(reader, offset)
+        return offset
+      }else {
+        mySize
       }
-    } else {
-      truncate(reader, offset)
-      offset
+    } catch {
+      case e: IOException => return offset //当读完文件时退出
     }
+    recursiveCheck(reader, offset + MAGIC_HEAD_LENGTH + size + MAGIC_TAIL_LENGTH)
   }
 
   def truncate(reader: DataFileAccessor, offset: Int) {

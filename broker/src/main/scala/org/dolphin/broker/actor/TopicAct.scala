@@ -19,12 +19,12 @@ class TopicAct(topicModel: TopicModel, storeParams: Map[String, String]) extends
 
   import context._
 
-  val topicPath = storeParams.get("path") + "/topics/" + topicModel.name
+  val topicPath = storeParams("path") + "/topics/" + topicModel.name
   val enrollAct = actorSelection(ACTOR_ROOT_PATH)
   val metricAct = actorSelection(ACTOR_ROOT_PATH + "/" + METRIC_ACT_NAME)
   var curIndex: String = _
   var curFile: Option[DataFile] = None
-  val widget = FileWidget(topicPath, TOPIC_PREFIX, TOPIC_SUFFIX)
+  implicit val widget = FileWidget(TOPIC_PREFIX, TOPIC_SUFFIX, topicPath)
   var waitingToBeCheck: AtomicInteger = _
   var file:RandomAccessFile = _
 
@@ -94,10 +94,6 @@ class TopicAct(topicModel: TopicModel, storeParams: Map[String, String]) extends
   }
 
   def createTopic(name: String) {
-    val topicDir = new File(storeParams("path") + "/" + name)
-    if (!topicDir.exists()) topicDir.mkdir() //创建topic目录
-
-
     //todo startTopicJournal
     val subscribeFile = new File(storeParams("path") + "/" + name + "subscriberInfoFile.data")
     if (!subscribeFile.exists()) subscribeFile.createNewFile()

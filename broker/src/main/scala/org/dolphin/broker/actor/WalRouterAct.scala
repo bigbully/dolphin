@@ -26,9 +26,8 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
   val path = storeParams("path")
   var storeDir: File = _
   val walPath = path + "/journal"
-  var walDir: File = _
   var waitingToBeCheck: AtomicInteger = _
-  val widget = FileWidget(walPath, WAL_PREFIX, WAL_SUFFIX)
+  implicit val widget = FileWidget(WAL_PREFIX, WAL_SUFFIX, walPath)
 
 
   val lock = new ReentrantLock()
@@ -39,7 +38,7 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
   var firstAsyncException: Exception = _
 
   val shutdownDone = new CountDownLatch(1)
-  var nextWriteBatch: Option[WriteBatch] = None
+  private[this] var nextWriteBatch: Option[WriteBatch] = None
 
   override def receive: Actor.Receive = {
     case Message(content, topic, subTopic, sync) => {
@@ -60,12 +59,13 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
     case CheckFileFinished => {
       val remainder = waitingToBeCheck.decrementAndGet()
       if (remainder == 0) {
+        log.info("wal文件初始化完成!当前存在wal文件为:{}", children)
         parent ! InitFinished
       }
     }
   }
 
-  def enqueue(write: WriteCommand) = {
+  private[this] def enqueue(write: WriteCommand) = {
     lock.lock()
     try {
       if (shutdown) throw new DolphinException("Async Writter Thread Shutdown")
@@ -193,6 +193,7 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
               batch.exception.set(e)
               batch.latch.countDown()
             }
+            case None =>
           }
         } finally {
           lock.unlock()
@@ -220,16 +221,18 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
         buff.writeInt(head.subTopicSize)
         head.subTopic match {
           case Some(sub) => buff.write(sub)
+          case None =>
         }
         buff.writeInt(head.size)
         buff.write(head.data)
         recursiveWriteToBuff(tails, buff)
       }
+      case Nil =>
     }
   }
 
   //todo shutdown的逻辑
-  @tailrec final def exchange: WriteBatch = {
+  @tailrec private[this] def exchange: WriteBatch = {
     nextWriteBatch match {
       case Some(batch) => {
         batch.dataFile.incrementLength(BATCH_TAIL_RECORD_MAGIC_LENGTH)
@@ -243,17 +246,15 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
 
 
   def initWalFiles {
-    storeDir = new File(path)
-    if (!storeDir.exists()) storeDir.mkdir()
-
-    walDir = new File(walPath)
-    if (!walDir.exists()) walDir.mkdir()
+    val walDir = new File(walPath)
     val files = walDir.listFiles.filter(file => file.isFile && isFileAvailable(file.getName)).toSeq
 
     files match {
       case Nil => {
         val newDataFile = createNewFile(children)
         actorOf(Props(classOf[WalAct], newDataFile), generateStrId(newDataFile.id))
+        log.info("wal文件初始化完成!当前存在wal文件为:{}", children)
+        parent ! InitFinished
       }
       case _ => {
         waitingToBeCheck = new AtomicInteger(files.length)
@@ -263,7 +264,6 @@ class WalRouterAct(storeParams: Map[String, String]) extends Actor with ActorLog
         })
       }
     }
-    log.info("wal文件初始化完成!当前存在wal文件为:{}", children)
   }
 
   private case class WriteCommand(data: Array[Byte], topic: Array[Byte], subTopic: Option[Array[Byte]], sync: Boolean) {

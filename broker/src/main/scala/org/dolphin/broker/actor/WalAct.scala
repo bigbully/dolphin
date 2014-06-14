@@ -5,9 +5,7 @@ import org.dolphin.broker.store._
 import org.dolphin.broker._
 import java.io.{RandomAccessFile, IOException}
 import java.util.zip.Adler32
-import WalAct._
 import java.util.{TimerTask, Timer}
-import org.dolphin.mail.SendBatchMessage
 import org.dolphin.broker.mail.{ReturnDataFile, GetDataFile}
 
 /**
@@ -51,7 +49,7 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
             file.addCorruptedBlocks(offset, nextOffset)
             offset = nextOffset
           }else {
-            return file
+            return
           }
         }
       }
@@ -103,7 +101,7 @@ class WalAct(val dataFile:DataFile) extends Actor with ActorLogging{
     reader.readFully(offset + BATCH_CONTROL_RECORD_SIZE, data)
     val checksum = new Adler32
     checksum.update(data, 0, data.length)
-    if (expectedChecksum != checksum) return -1
+    if (expectedChecksum != checksum.getValue) return -1
 
     //验证batch尾
     val batchTail = new Array[Byte](BATCH_TAIL_RECORD_MAGIC_LENGTH)

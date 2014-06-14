@@ -1,17 +1,15 @@
 package org.dolphin.client.producer
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import akka.actor.{ActorRef, Actor}
 import org.dolphin.domain.{BrokerModel, TopicModel, ClientModel}
 import org.dolphin.common._
 import org.dolphin.client._
-import akka.pattern._
-import org.dolphin.mail.{ClientRegisterSuccess, ClientRegister}
 import akka.util.Timeout
 import java.util.concurrent.TimeUnit
 import org.dolphin.Util.Waiting
 import org.slf4j.LoggerFactory
-import org.dolphin.client.mail.{RegisterClient, BrokersOnline}
+import org.dolphin.client.mail.RegisterClient
+import akka.pattern._
 
 /**
  * User: bigbully

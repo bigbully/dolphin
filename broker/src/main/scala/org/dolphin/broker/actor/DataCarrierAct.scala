@@ -3,7 +3,7 @@ package org.dolphin.broker.actor
 import akka.actor._
 import org.dolphin.broker._
 import org.dolphin.common._
-import java.io.{EOFException, IOException, RandomAccessFile}
+import java.io.{File, EOFException, IOException, RandomAccessFile}
 import org.dolphin.broker.store.{DataByteArrayInputStream, DataFile, DataFileAccessor}
 import java.util.zip.{Adler32, Checksum}
 import org.dolphin.broker.mail.{ReturnDataFile, GetDataFile, WriteDataCarrierFile, DistributeToTopic}
@@ -11,7 +11,6 @@ import akka.actor.ActorIdentity
 import scala.Some
 import akka.actor.Identify
 import java.util.concurrent.{SynchronousQueue, Executors, TimeUnit, ThreadPoolExecutor}
-import com.jd.bdp.whale.communication.util.AbortPolicyWithReport
 import scala.annotation.tailrec
 
 /**
@@ -23,7 +22,7 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
 
   import context._
 
-  val dataCarrierFile = new RandomAccessFile(storeParams.get("path") + "/journal/"+DATA_CARRIER_FILE_ACT_NAME + FILE_SUFFIX, "rw")
+  val dataCarrierFile = new RandomAccessFile(storeParams("path") + "/journal/"+DATA_CARRIER_FILE_ACT_NAME + DATA_CARRIER_FILE_SUFFIX, "rw")
   var dataCarrierFileAct:ActorRef = _
   //单线程顺序读取wal文件
   private val pool = new ThreadPoolExecutor(1, 1, 3L, TimeUnit.SECONDS, new SynchronousQueue[Runnable], Executors.defaultThreadFactory)
@@ -78,7 +77,7 @@ class DataCarrierAct(storeParams: Map[String, String]) extends Actor with ActorL
         Thread.sleep(10)
         readOffset
       }
-      case e => {
+      case e:Throwable => {
         log.error("递归读取wal文件时发生异常!继续进行读取!", e)
         readOffset
       }

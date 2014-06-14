@@ -14,8 +14,8 @@ object ClientFactory {
   private val system = ActorSystem("client")
   private val clientRouterAct = system.actorOf(Props[ClientRouterAct], CLIENT_ROUTER_ACT_NAME)
 
-  def createProducer(conf:ClientConfig):Producer = {
-    conf.get(PRODUCER_SEND_MODE) match {
+  def createProducer(conf: ClientConfig): Producer = {
+    conf.get(PRODUCER_SEND_MODE).get match {
       case ASYNC => {
         val producer = new AsyncProducer(generateId, conf)
         clientRouterAct ! CreateClient(producer)

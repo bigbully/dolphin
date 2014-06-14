@@ -9,12 +9,11 @@ import java.io.{UTFDataFormatException, DataOutput, OutputStream}
  */
 final class DataByteArrayOutputStream(val size:Int) extends OutputStream with DataOutput{
   assert(size >= 0, "Invalid size: " + size)
-  private val DEFAULT_SIZE: Int = 2048
   private var buf = new Array[Byte](size)
   private var pos = 0
 
   def this() {
-    this(DEFAULT_SIZE)
+    this(DataByteArrayOutputStream.DEFAULT_SIZE)
   }
 
   /**
@@ -31,7 +30,7 @@ final class DataByteArrayOutputStream(val size:Int) extends OutputStream with Da
    * start using a fresh byte array
    */
   def restart {
-    restart(DEFAULT_SIZE)
+    restart(DataByteArrayOutputStream.DEFAULT_SIZE)
   }
 
   /**
@@ -113,49 +112,49 @@ final class DataByteArrayOutputStream(val size:Int) extends OutputStream with Da
 
   def writeShort(v: Int) {
     ensureEnoughBuffer(pos + 2)
-    buf(pos) = (v >>> 8).toByte;
+    buf(pos) = (v >>> 8).toByte
     pos += 1
-    buf(pos) = (v >>> 0).toByte;
+    buf(pos) = (v >>> 0).toByte
     pos += 1
   }
 
   def writeChar(v: Int) {
     ensureEnoughBuffer(pos + 2)
-    buf(pos) = (v >>> 8).toByte;
+    buf(pos) = (v >>> 8).toByte
     pos += 1
-    buf(pos) = (v >>> 0).toByte;
+    buf(pos) = (v >>> 0).toByte
     pos += 1
   }
 
   def writeInt(v: Int) {
     ensureEnoughBuffer(pos + 4)
-    buf(pos) = (v >>> 24).toByte;
+    buf(pos) = (v >>> 24).toByte
     pos += 1
-    buf(pos) = (v >>> 16).toByte;
+    buf(pos) = (v >>> 16).toByte
     pos += 1
-    buf(pos) = (v >>> 8).toByte;
+    buf(pos) = (v >>> 8).toByte
     pos += 1
-    buf(pos) = (v >>> 0).toByte;
+    buf(pos) = (v >>> 0).toByte
     pos += 1
   }
 
   def writeLong(v: Long) {
     ensureEnoughBuffer(pos + 8)
-    buf(pos) = (v >>> 56).toByte;
+    buf(pos) = (v >>> 56).toByte
     pos += 1
-    buf(pos) = (v >>> 48).toByte;
+    buf(pos) = (v >>> 48).toByte
     pos += 1
-    buf(pos) = (v >>> 40).toByte;
+    buf(pos) = (v >>> 40).toByte
     pos += 1
-    buf(pos) = (v >>> 32).toByte;
+    buf(pos) = (v >>> 32).toByte
     pos += 1
-    buf(pos) = (v >>> 24).toByte;
+    buf(pos) = (v >>> 24).toByte
     pos += 1
-    buf(pos) = (v >>> 16).toByte;
+    buf(pos) = (v >>> 16).toByte
     pos += 1
-    buf(pos) = (v >>> 8).toByte;
+    buf(pos) = (v >>> 8).toByte
     pos += 1
-    buf(pos) = (v >>> 0).toByte;
+    buf(pos) = (v >>> 0).toByte
     pos += 1
   }
 
@@ -203,25 +202,25 @@ final class DataByteArrayOutputStream(val size:Int) extends OutputStream with Da
     writeShort(encodedsize)
     var j = 0
     for (i <- 0 until strlen; c = str.charAt(i);if (c >= 0x0001 && c <= 0x007F)){
-      buf(pos) = c
+      buf(pos) = c.toByte
       pos += 1
       j += 1
     }
     for(i <- j until strlen; c = str.charAt(i)){
       if ((c >= 0x0001) && (c <= 0x007F)) {
-        buf(pos) = c.toByte;
+        buf(pos) = c.toByte
         pos += 1
       } else if (c > 0x07FF) {
-        buf(pos)= (0xE0 | ((c >> 12) & 0x0F)).toByte;
+        buf(pos)= (0xE0 | ((c >> 12) & 0x0F)).toByte
         pos += 1
-        buf(pos)= (0x80 | ((c >> 6) & 0x3F)).toByte;
+        buf(pos)= (0x80 | ((c >> 6) & 0x3F)).toByte
         pos += 1
-        buf(pos) = (0x80 | ((c >> 0) & 0x3F)).toByte;
+        buf(pos) = (0x80 | ((c >> 0) & 0x3F)).toByte
         pos += 1
       } else {
-        buf(pos) = (0xC0 | ((c >> 6) & 0x1F)).toByte;
+        buf(pos) = (0xC0 | ((c >> 6) & 0x1F)).toByte
         pos += 1
-        buf(pos) = (0x80 | ((c >> 0) & 0x3F)).toByte;
+        buf(pos) = (0x80 | ((c >> 0) & 0x3F)).toByte
         pos += 1
       }
     }
@@ -238,4 +237,7 @@ final class DataByteArrayOutputStream(val size:Int) extends OutputStream with Da
     ensureEnoughBuffer(pos + size)
     pos+=size
   }
+}
+object DataByteArrayOutputStream {
+  private val DEFAULT_SIZE: Int = 2048
 }

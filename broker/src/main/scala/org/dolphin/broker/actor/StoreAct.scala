@@ -5,6 +5,7 @@ import org.dolphin.broker._
 import org.dolphin.mail.{SendBatchMessage, CreateTopic}
 import scala.collection.mutable.ArrayBuffer
 import org.dolphin.domain.Message
+import java.io.File
 
 /**
  * 存储总入口的act
@@ -40,8 +41,27 @@ class StoreAct(storeParams: Map[String, String]) extends Actor with ActorLogging
 
   @throws[Exception](classOf[Exception])
   override def preStart() {
+    initAllDefaultFiles
     topicRouterAct = actorOf(Props(classOf[TopicRouterAct], storeParams), TOPIC_ROUTER_ACT_NAME)
     walRouterAct = actorOf(Props(classOf[WalRouterAct], storeParams), WAL_ROUTER_ACT_NAME)
     dataCarrierAct = actorOf(Props(classOf[DataCarrierAct], storeParams), DATA_CARRIER_ACT_NAME)
+  }
+
+  def initAllDefaultFiles {
+    val path = storeParams("path")
+    val storeDir = new File(path)
+    val topicRouterDir = new File(path + "/topics")
+    val journalDir = new File(path + "/journal")
+    val dataCarrierFile = new File(path + "/journal/"+DATA_CARRIER_FILE_ACT_NAME + DATA_CARRIER_FILE_SUFFIX)
+    if (!storeDir.exists()) {//创建topicRouter目录
+      storeDir.mkdir()
+      topicRouterDir.mkdir()
+      journalDir.mkdir()
+      dataCarrierFile.createNewFile()
+    }else {
+      if (!topicRouterDir.exists()) topicRouterDir.mkdir()
+      if (!journalDir.exists()) journalDir.mkdir()
+      if (!dataCarrierFile.exists()) dataCarrierFile.createNewFile()
+    }
   }
 }

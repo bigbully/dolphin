@@ -11,7 +11,7 @@ object ClientTest {
   implicit val waiting = Waiting(3)
 
   def main(args: Array[String]) {
-    val producer = ClientFactory.createProducer(ClientConfig("127.0.0.1", 11111, ("send.strategy", "roundRobin")))
+    val producer = ClientFactory.createProducer(ClientConfig("127.0.0.1", 11111, ("send.strategy", "round-robin")))
     val topic = "myTopic"
     val cluster = "myCluster"
     producer.publish(topic, cluster)

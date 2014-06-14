@@ -69,7 +69,7 @@ class DataFileAccessorPool {
   def closeDataFileAccessor(reader:DataFileAccessor) {
     val pool = pools.get(reader.dataFile.id)
     pool match {
-      case Nil => reader.dispose
+      case None => reader.dispose
       case Some(_) if (closed) => reader.dispose
       case Some(p) => p.closeDataFileReader(reader)
     }

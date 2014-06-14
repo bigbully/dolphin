@@ -7,7 +7,7 @@ import org.dolphin.manager.util.CollectJob
 import org.quartz.impl.StdSchedulerFactory
 import org.dolphin.common._
 
-object ManagerStart {
+object StartManager {
 
   val scheduler = StdSchedulerFactory.getDefaultScheduler
   scheduler.start();

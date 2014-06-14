@@ -10,7 +10,7 @@ import org.dolphin.domain.BrokerModel
  * Date: 14-4-26
  * Time: 下午6:28
  */
-abstract class Producer(private val id: String, private val conf: ClientConfig) extends Client(id, conf){
+abstract class Producer(id: String, conf: ClientConfig) extends Client(id, conf){
 
   def publish(topic:String, cluster:String)
 

@@ -56,8 +56,7 @@ class TopicRouterAct(storeParams:Map[String,String]) extends Actor with ActorLog
 
   def findExistentTopics:Option[List[TopicModel]] = {
     val topicRouterDir = new File(path)
-    if (!topicRouterDir.exists()){//创建topicRouter目录
-      topicRouterDir.mkdir()
+    if (topicRouterDir.listFiles().length == 0){
       None
     }else {
       Some(topicRouterDir.listFiles().map(file => TopicModel(file.getName, cluster)).toList)

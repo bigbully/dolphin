@@ -20,6 +20,7 @@ package object broker {
   val WAL_ROUTER_ACT_NAME = "walRouterAct"
   val DATA_CARRIER_ACT_NAME = "dataCarrierAct"
   val DATA_CARRIER_FILE_ACT_NAME = "data-carrier"
+  val DATA_CARRIER_FILE_SUFFIX = ".log"
 
   val FindExistentTopics = "findExistentTopics"
   val CheckFile = "checkFile"

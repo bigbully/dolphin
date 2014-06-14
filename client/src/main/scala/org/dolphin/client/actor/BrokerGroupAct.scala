@@ -28,7 +28,7 @@ class BrokerGroupAct(conf:ClientConfig) extends Actor with ActorLogging{
 
   override def receive: Actor.Receive = {
     case BrokersOnline(list) => {
-      var brokerIds = List.empty[Int]
+      var brokerIds = List.empty[String]
       var brokerPaths = List.empty[String]
       list.foreach{brokerModel => {
         val brokerIdStr = generateStrId(brokerModel.id)
@@ -38,6 +38,7 @@ class BrokerGroupAct(conf:ClientConfig) extends Actor with ActorLogging{
             brokerPaths ::= brokerAct.path.toString
             brokerIds ::= brokerIdStr
           }
+          case Some(_) =>
         }
       }}
       registerToRouter(brokerPaths.reverse)
@@ -46,14 +47,14 @@ class BrokerGroupAct(conf:ClientConfig) extends Actor with ActorLogging{
   }
 
   def registerToRouter(paths:List[String]) {
-    brokerRouter = brokerRouter match {
-      case None => Some(actorOf(getRouterGroup(paths).props(), BROKER_ROUTER_ACT_NAME))
-      case Some(act) => act ! AddRoutee(SeveralRoutees(paths.map(ActorSelectionRoutee(_)).toIndexedSeq))
+    brokerRouter match {
+      case None => brokerRouter = Some(actorOf(getRouterGroup(paths).props(), BROKER_ROUTER_ACT_NAME))
+      case Some(act) => act ! AddRoutee(SeveralRoutees(paths.map(path => ActorSelectionRoutee(actorSelection(path))).toIndexedSeq))
     }
   }
 
   def getRouterGroup(paths:immutable.Iterable[String]):Group = {
-    conf.get(SEND_STRATEGY) match {
+    conf.get(SEND_STRATEGY).get match {
       case ROUND_ROBIN => RoundRobinGroup(paths)
       case SMALLEST_MAILBOX => throw new DolphinException("todo")
       case RANDOM => RandomGroup(paths)
